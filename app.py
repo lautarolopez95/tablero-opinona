@@ -21,8 +21,8 @@ st.markdown("""
 COLS = {
     "FECHA": "FECHA",
     "LINEA": "Linea",
-    "CATEGORIA": "Desglose 1",   # <-- Cambiado para usar el agrupador correcto de OPINONA
-    "EQUIPO": "Desc_Paro_2",     # Equipo afectado
+    "CATEGORIA": "Desc_Paro_1",  # Volvemos a Desc_Paro_1 como solicitó el usuario
+    "EQUIPO": "Desc_Paro_2",     # Nivel 2
     "NIVEL_3": "Desc_Paro_3",
     "NIVEL_4": "Desc_Paro_4",
     "TIEMPO": "PROD + PAROS [Min]"
@@ -68,6 +68,7 @@ def cargar_datos():
     df['AÑO'] = df[COLS["FECHA"]].dt.year
     df['MES'] = df[COLS["FECHA"]].dt.month
     
+    # Limpieza rigurosa de Nivel 1 para que encaje con los 6 tiempos
     df[COLS["CATEGORIA"]] = df[COLS["CATEGORIA"]].astype(str).str.upper().str.strip()
     df[COLS["CATEGORIA"]] = df[COLS["CATEGORIA"]].str.replace('Ó', 'O', regex=False).str.replace('É', 'E', regex=False).str.replace('Í', 'I', regex=False)
     # Reemplazar el hashtag por PRODUCCION
@@ -136,20 +137,21 @@ with tab1:
     # Calcular Porcentaje real matemáticamente
     df_linea_cat['TOTAL_LINEA'] = df_linea_cat.groupby(COLS["LINEA"])[COLS["TIEMPO"]].transform('sum')
     df_linea_cat['PORCENTAJE'] = (df_linea_cat[COLS["TIEMPO"]] / df_linea_cat['TOTAL_LINEA']) * 100
+    # Ocultar etiquetas si el porcentaje es menor al 2% para evitar amontonamiento
+    df_linea_cat['TEXTO'] = df_linea_cat['PORCENTAJE'].apply(lambda x: f"{x:.2f}%" if x >= 2.0 else "")
     
     col1, col2 = st.columns(2)
     with col1:
         fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y="PORCENTAJE", color=COLS["CATEGORIA"],
-                            color_discrete_map=COLORS,
-                            hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_LINEA": False},
+                            color_discrete_map=COLORS, text="TEXTO",
+                            hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_LINEA": False, "TEXTO": False},
                             title="OPINONA PLANTA POR LÍNEA")
         
-        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=700)
-        # Mostrar el porcentaje en formato .2f% y forzar a que sea legible
+        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750)
+        # Forzar a que sea legible con texto dinámico
         fig_planta.update_traces(
-            texttemplate='%{y:.2f}%', 
             textposition='inside',
-            insidetextfont=dict(size=14, color='white'),
+            insidetextfont=dict(size=16, family="Arial Black"), # Aumentado y en negrita. Plotly ajusta el color auto.
             textangle=0
         )
         st.plotly_chart(fig_planta, use_container_width=True)
@@ -162,17 +164,17 @@ with tab1:
         # Calcular Porcentaje real matemáticamente
         df_año_cat['TOTAL_AÑO'] = df_año_cat.groupby('AÑO')[COLS["TIEMPO"]].transform('sum')
         df_año_cat['PORCENTAJE'] = (df_año_cat[COLS["TIEMPO"]] / df_año_cat['TOTAL_AÑO']) * 100
+        df_año_cat['TEXTO'] = df_año_cat['PORCENTAJE'].apply(lambda x: f"{x:.2f}%" if x >= 2.0 else "")
         
         fig_total = px.bar(df_año_cat, x='AÑO', y="PORCENTAJE", color=COLS["CATEGORIA"],
-                           color_discrete_map=COLORS,
-                           hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_AÑO": False},
+                           color_discrete_map=COLORS, text="TEXTO",
+                           hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_AÑO": False, "TEXTO": False},
                            title="OPINONA TOTAL PLANTA (ANUAL)")
                            
-        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=700)
+        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750)
         fig_total.update_traces(
-            texttemplate='%{y:.2f}%', 
             textposition='inside',
-            insidetextfont=dict(size=14, color='white'),
+            insidetextfont=dict(size=16, family="Arial Black"),
             textangle=0
         )
         st.plotly_chart(fig_total, use_container_width=True)
@@ -183,6 +185,9 @@ with tab1:
     
     c1, c2 = st.columns(2)
     c3, c4 = st.columns(2)
+    
+    # Filtrar Producción y Tiempo No Usado de los gráficos de desglose
+    df_niveles = df[~df[COLS["CATEGORIA"]].isin(["PRODUCCION", "TIEMPO NO USADO", "PRODUCCIÓN"])].copy()
     
     def plot_top_horizontal_interactive(df_temp, groupby_col, title, key):
         res = df_temp.groupby(groupby_col)[COLS["TIEMPO"]].sum().reset_index()
