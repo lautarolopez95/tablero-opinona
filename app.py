@@ -205,68 +205,103 @@ with tab1:
 # PÁGINA 2: PÉRDIDA OPINONA
 # =========================================================================
 with tab2:
-    st.title("Pérdida de OPINONA por Equipo")
+    st.title("Pérdida de OPINONA")
     
-    # Filtrar solo PARADA MAYOR y PARADA MENOR
-    df_tab2 = df[df['CATEGORIA_100'].isin(["PARADA MAYOR", "PARADA MENOR"])].copy()
+    # El denominador FIJO para el periodo seleccionado (independiente de línea/equipo)
+    # Se calcula sobre las 6 categorías principales (df_100)
+    TIEMPO_TOTAL_PLANTA = df_100[COLS["TIEMPO"]].sum()
     
-    # 1. Gráfico de Tendencia Histórica (Mes-Año)
-    st.subheader("Tendencia de Pérdidas por Paradas")
-    
-    df_tab2['MES_AÑO_NUM'] = df_tab2['AÑO'] * 100 + df_tab2['MES']
-    df_tab2['MES_AÑO_STR'] = df_tab2['MES'].map(MESES_ABBR) + " " + df_tab2['AÑO'].astype(int).astype(str)
-    
-    df_tendencia = df_tab2.groupby(['MES_AÑO_NUM', 'MES_AÑO_STR', 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
-    df_tendencia = df_tendencia.sort_values('MES_AÑO_NUM')
-    
-    fig_tend = px.line(df_tendencia, x='MES_AÑO_STR', y=COLS["TIEMPO"], color='CATEGORIA_100',
-                       color_discrete_map=COLORS, markers=True,
-                       title="Minutos de Parada a lo largo del tiempo")
-    
-    fig_tend.update_layout(xaxis_title="Periodo", yaxis_title="Minutos", xaxis={'categoryorder':'array', 'categoryarray':df_tendencia['MES_AÑO_STR'].unique()})
-    st.plotly_chart(fig_tend, use_container_width=True)
-    
-    # 2. Gráfico por Línea (Pérdidas)
-    st.subheader("Desglose de Pérdidas por Línea y Categoría")
-    
-    df_linea_perd = df_tab2.groupby([COLS["LINEA"], 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
-    
-    fig_linea_perd = px.bar(df_linea_perd, x=COLS["LINEA"], y=COLS["TIEMPO"], color='CATEGORIA_100',
-                            color_discrete_map=COLORS, barmode='group', text_auto=".0f",
-                            title="Líneas Perdidas por Parada Mayor y Menor")
-    
-    fig_linea_perd.update_layout(yaxis_title="Minutos")
-    st.plotly_chart(fig_linea_perd, use_container_width=True)
-    
-    st.markdown("---")
-    st.subheader("Desgloses de Pérdida OPINONA por Paros (Equipos)")
-    
-    st.markdown("### Selecciona el Filtro de Numerador")
+    st.markdown("### Filtros de Numerador (Línea y Equipo)")
     l1, l2 = st.columns(2)
-    lineas_disp = ["Todas"] + sorted(df[COLS["LINEA"]].dropna().unique().tolist())
-    linea_filtro = l1.selectbox("Filtrar por Línea", lineas_disp)
+    lineas_disp = sorted(df_100[COLS["LINEA"]].dropna().unique().tolist())
+    lineas_sel = l1.multiselect("Filtrar por Línea", options=lineas_disp, default=[])
     
-    TIEMPO_TOTAL_PLANTA = df[COLS["TIEMPO"]].sum()
-    st.info(f"**Denominador (Tiempo Total Planta Filtrada por Fechas Globales):** {TIEMPO_TOTAL_PLANTA:,.0f} min")
+    # Filtrar equipos según líneas seleccionadas (si hay)
+    df_filtro_linea = df_100 if not lineas_sel else df_100[df_100[COLS["LINEA"]].isin(lineas_sel)]
+    equipos_disp = sorted(df_filtro_linea[COLS["NIVEL_2"]].dropna().unique().tolist())
+    equipos_sel = l2.multiselect("Filtrar por Equipo", options=equipos_disp, default=[])
     
-    df_equipos = df.copy()
-    if linea_filtro != "Todas":
-        df_equipos = df_equipos[df_equipos[COLS["LINEA"]] == linea_filtro]
+    st.info(f"**Denominador (Tiempo Total Planta Periodo Seleccionado):** {TIEMPO_TOTAL_PLANTA:,.0f} min")
+    
+    # Numerador: Filtrado por línea y equipo
+    df_num = df_100.copy()
+    if lineas_sel:
+        df_num = df_num[df_num[COLS["LINEA"]].isin(lineas_sel)]
+    if equipos_sel:
+        df_num = df_num[df_num[COLS["NIVEL_2"]].isin(equipos_sel)]
         
-    df_equipos_pmayor = df_equipos[df_equipos['CATEGORIA_100'] == "PARADA MAYOR"]
-    df_equipos_pmenor = df_equipos[df_equipos['CATEGORIA_100'] == "PARADA MENOR"]
+    # --- 1. Gráficos por Equipo (Paradas Mayores y Menores) ---
+    st.subheader("Pérdida de OPINONA por Paradas (Equipos)")
+    df_equipos_pmayor = df_num[df_num['CATEGORIA_100'] == "PARADA MAYOR"]
+    df_equipos_pmenor = df_num[df_num['CATEGORIA_100'] == "PARADA MENOR"]
     
     def plot_perdida_equipo(df_temp, color_bar, title):
         res = df_temp.groupby(COLS["NIVEL_2"])[COLS["TIEMPO"]].sum().reset_index()
-        res['PORCENTAJE'] = (res[res[COLS["TIEMPO"]] > 0][COLS["TIEMPO"]] / TIEMPO_TOTAL_PLANTA) * 100
-        res = res.sort_values(by='PORCENTAJE', ascending=True).tail(15)
+        # Cálculo de porcentaje usando el denominador global del periodo
+        res['PORCENTAJE'] = (res[COLS["TIEMPO"]] / TIEMPO_TOTAL_PLANTA) * 100
+        res = res[res['PORCENTAJE'] > 0]
+        res = res.sort_values(by='PORCENTAJE', ascending=True).tail(15) # Top 15 para no saturar
         
         fig = px.bar(res, x='PORCENTAJE', y=COLS["NIVEL_2"], orientation='h', title=title, text_auto=".2f", color_discrete_sequence=[color_bar])
-        fig.update_layout(yaxis_title=None, xaxis_title="% Pérdida OPINONA (Sobre total Planta/Filtro Global)", height=600)
+        fig.update_layout(yaxis_title=None, xaxis_title="% Pérdida OPINONA", xaxis_ticksuffix=" %", height=500)
         st.plotly_chart(fig, use_container_width=True)
         
     col_may, col_men = st.columns(2)
     with col_may:
-        plot_perdida_equipo(df_equipos_pmayor, COLORS["PARADA MAYOR"], "Pérdida por Paradas Mayores (Nivel 2)")
+        plot_perdida_equipo(df_equipos_pmayor, COLORS["PARADA MAYOR"], "Pérdida por Paradas Mayores (Top 15 Equipos)")
     with col_men:
-        plot_perdida_equipo(df_equipos_pmenor, COLORS["PARADA MENOR"], "Pérdida por Paradas Menores (Nivel 2)")
+        plot_perdida_equipo(df_equipos_pmenor, COLORS["PARADA MENOR"], "Pérdida por Paradas Menores (Top 15 Equipos)")
+        
+    st.markdown("---")
+    
+    # --- 2. Gráfico de Columnas por Mes ---
+    st.subheader("Evolución Mensual de Pérdidas de OPINONA")
+    
+    # Filtrar solo PM, pm, y PV
+    cats_mensuales = ["PARADA MAYOR", "PARADA MENOR", "PERDIDA DE VELOCIDAD"]
+    df_mensual_num = df_num[df_num['CATEGORIA_100'].isin(cats_mensuales)].copy()
+    
+    # Denominador mensual (basado en df_100, SIN filtro de equipo/línea, para reflejar % a nivel planta)
+    df_den_mes = df_100.groupby(['AÑO', 'MES'])[COLS["TIEMPO"]].sum().reset_index(name='DEN_MES')
+    
+    # Numerador mensual
+    df_num_mes = df_mensual_num.groupby(['AÑO', 'MES', 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index(name='NUM_MES')
+    
+    # Unir y calcular %
+    if not df_num_mes.empty and not df_den_mes.empty:
+        df_plot_mes = pd.merge(df_num_mes, df_den_mes, on=['AÑO', 'MES'])
+        df_plot_mes['PORCENTAJE'] = (df_plot_mes['NUM_MES'] / df_plot_mes['DEN_MES']) * 100
+        
+        df_plot_mes['MES_AÑO_NUM'] = df_plot_mes['AÑO'] * 100 + df_plot_mes['MES']
+        df_plot_mes['MES_AÑO_STR'] = df_plot_mes['MES'].map(MESES_ABBR) + " " + df_plot_mes['AÑO'].astype(int).astype(str)
+        df_plot_mes = df_plot_mes.sort_values('MES_AÑO_NUM')
+        
+        fig_col_mes = px.bar(df_plot_mes, x='MES_AÑO_STR', y='PORCENTAJE', color='CATEGORIA_100',
+                             color_discrete_map=COLORS, text_auto=".2f",
+                             title="% Pérdidas OPINONA a Nivel Planta por Mes")
+        fig_col_mes.update_layout(xaxis_title="Mes", yaxis_title="% Pérdida", yaxis_ticksuffix=" %",
+                                  xaxis={'categoryorder':'array', 'categoryarray':df_plot_mes['MES_AÑO_STR'].unique()})
+        # Mostrar el texto por dentro
+        fig_col_mes.update_traces(textposition='inside', insidetextfont=dict(size=14, family="Arial Black"), textangle=0)
+        st.plotly_chart(fig_col_mes, use_container_width=True)
+        
+        # --- 3. Gráfico de Líneas por Mes ---
+        st.markdown("---")
+        st.subheader("Tendencia de Paradas Mayores y Menores")
+        df_linea_mes = df_plot_mes[df_plot_mes['CATEGORIA_100'].isin(["PARADA MAYOR", "PARADA MENOR"])]
+        
+        if not df_linea_mes.empty:
+            fig_line_mes = px.line(df_linea_mes, x='MES_AÑO_STR', y='PORCENTAJE', color='CATEGORIA_100',
+                                   color_discrete_map=COLORS, markers=True, text='PORCENTAJE',
+                                   title="Tendencia Mensual de Paradas Mayores y Menores (%)")
+            fig_line_mes.update_traces(textposition='top center', texttemplate='%{text:.2f}%', textfont=dict(size=12))
+            fig_line_mes.update_layout(xaxis_title="Mes", yaxis_title="% Pérdida", yaxis_ticksuffix=" %",
+                                       xaxis={'categoryorder':'array', 'categoryarray':df_plot_mes['MES_AÑO_STR'].unique()})
+            
+            # Ajustar el margen superior para que los textos de la línea no se corten
+            fig_line_mes.update_layout(margin=dict(t=50))
+            st.plotly_chart(fig_line_mes, use_container_width=True)
+        else:
+            st.warning("No hay datos de Parada Mayor o Menor para la selección actual.")
+    else:
+        st.warning("No hay datos suficientes para mostrar la evolución mensual.")
