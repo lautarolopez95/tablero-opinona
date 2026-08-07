@@ -13,7 +13,6 @@ st.markdown("""
     /* Ocultar elementos de UI de Streamlit para look más limpio */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     
     /* Estilo de tipografía elegante */
     h1, h2, h3 {
