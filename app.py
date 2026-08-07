@@ -7,6 +7,43 @@ import plotly.express as px
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="Tablero OPINONA", layout="wide", initial_sidebar_state="expanded")
 
+# --- ESTILOS CORPORATIVOS ---
+st.markdown("""
+<style>
+    /* Ocultar elementos de UI de Streamlit para look más limpio */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Estilo de tipografía elegante */
+    h1, h2, h3 {
+        color: #2c3e50;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-weight: 600;
+    }
+    
+    /* Estilo para las pestañas (Tabs) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #555;
+        padding-bottom: 10px;
+    }
+    
+    /* Contenedores de los gráficos estilo tarjeta */
+    .stPlotlyChart {
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        background-color: #ffffff;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # -----------------------------------------------------------------------------
 # DICCIONARIO DE COLUMNAS (Mapeo exacto al Excel/Sheets)
 # -----------------------------------------------------------------------------
@@ -60,8 +97,6 @@ def cargar_datos():
     df['AÑO'] = df[COLS["FECHA"]].dt.year
     df['MES'] = df[COLS["FECHA"]].dt.month
     
-    # Función robusta para mapear Desglose 1 a las 6 categorías exactas
-    # ignorando tildes, mayúsculas o espacios extra.
     def mapear_opinona(x):
         x = str(x).upper()
         if 'PRODUCCI' in x or x == '#': return 'PRODUCCION'
@@ -70,11 +105,10 @@ def cargar_datos():
         if 'MENOR' in x: return 'PARADA MENOR'
         if 'PARADA' in x and 'EXTERNA' in x: return 'PARADA EXTERNA'
         if 'VELOCIDAD' in x: return 'PERDIDA DE VELOCIDAD'
-        return x # Deja intacto NONA u otros para que se excluyan solos
+        return x 
         
     df['CATEGORIA_100'] = df[COLS["DESGLOSE"]].apply(mapear_opinona)
     
-    # Limpieza básica para los niveles
     df[COLS["NIVEL_1"]] = df[COLS["NIVEL_1"]].astype(str).str.upper().str.strip()
     df[COLS["NIVEL_2"]] = df[COLS["NIVEL_2"]].astype(str).str.upper().str.strip()
     return df
@@ -125,28 +159,29 @@ tab1, tab2 = st.tabs(["📊 OPINONA General", "🎯 Pérdida OPINONA por Equipo"
 with tab1:
     st.title("OPINONA PLANTA")
     
-    # 100% EXCLUSIVO: Solo estas 6 categorías, obtenidas de CATEGORIA_100
     CAT_100 = ["PRODUCCION", "DETENCION PLANEADA", "PARADA MAYOR", "PARADA MENOR", "PARADA EXTERNA", "PERDIDA DE VELOCIDAD"]
     df_100 = df[df['CATEGORIA_100'].isin(CAT_100)].copy()
     
-    # 1. Gráfico por Línea
     df_linea_cat = df_100.groupby([COLS["LINEA"], 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
     df_linea_cat['TOTAL_LINEA'] = df_linea_cat.groupby(COLS["LINEA"])[COLS["TIEMPO"]].transform('sum')
     df_linea_cat['PORCENTAJE'] = (df_linea_cat[COLS["TIEMPO"]] / df_linea_cat['TOTAL_LINEA']) * 100
     df_linea_cat['TEXTO'] = df_linea_cat['PORCENTAJE'].apply(lambda x: f"{x:.2f}%" if x >= 2.0 else "")
     
+    # Tooltip personalizado
+    df_linea_cat['HOVER_TEXT'] = df_linea_cat.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%<br>{r[COLS['TIEMPO']]:.0f} MIN", axis=1)
+    
     col1, col2 = st.columns(2)
     with col1:
         fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y="PORCENTAJE", color='CATEGORIA_100',
-                            color_discrete_map=COLORS, text="TEXTO",
-                            hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_LINEA": False, "TEXTO": False},
+                            color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
                             title="OPINONA PLANTA POR LÍNEA")
         
-        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750, legend_title="Tiempos OPINONA")
-        fig_planta.update_traces(textposition='inside', insidetextfont=dict(size=16, family="Arial Black"), textangle=0)
+        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750, 
+                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""))
+        fig_planta.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
+                                 hovertemplate="%{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_planta, use_container_width=True)
         
-    # 2. Gráfico por Año
     with col2:
         df_año_cat = df_100.groupby(['AÑO', 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
         df_año_cat['AÑO'] = df_año_cat['AÑO'].astype(int).astype(str)
@@ -154,30 +189,36 @@ with tab1:
         df_año_cat['PORCENTAJE'] = (df_año_cat[COLS["TIEMPO"]] / df_año_cat['TOTAL_AÑO']) * 100
         df_año_cat['TEXTO'] = df_año_cat['PORCENTAJE'].apply(lambda x: f"{x:.2f}%" if x >= 2.0 else "")
         
+        df_año_cat['HOVER_TEXT'] = df_año_cat.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%<br>{r[COLS['TIEMPO']]:.0f} MIN", axis=1)
+        
         fig_total = px.bar(df_año_cat, x='AÑO', y="PORCENTAJE", color='CATEGORIA_100',
-                           color_discrete_map=COLORS, text="TEXTO",
-                           hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_AÑO": False, "TEXTO": False},
+                           color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
                            title="OPINONA TOTAL PLANTA (ANUAL)")
                            
-        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750, legend_title="Tiempos OPINONA")
-        fig_total.update_traces(textposition='inside', insidetextfont=dict(size=16, family="Arial Black"), textangle=0)
+        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750, 
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""))
+        fig_total.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
+                                hovertemplate="%{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_total, use_container_width=True)
 
     st.markdown("---")
     st.subheader("Desglose de Paros (Filtros en Cascada)")
-    st.info("👆 Haz clic en las barras de un gráfico para filtrar los datos de los siguientes gráficos. Puedes seleccionar múltiples barras manteniendo presionada la tecla Shift en tu teclado.")
+    st.info("👆 Selecciona barras para filtrar el resto de los niveles. Mantén Shift presionado para selección múltiple.")
     
     c1, c2 = st.columns(2)
     c3, c4 = st.columns(2)
     
-    # Filtrar Producción y Tiempo No Usado para los desgloses
     df_niveles = df[~df[COLS["NIVEL_1"]].str.contains('PRODUCCI|NO USADO|#', na=False, case=False)].copy()
     
     def plot_top_horizontal_interactive(df_temp, groupby_col, title, key):
         res = df_temp.groupby(groupby_col)[COLS["TIEMPO"]].sum().reset_index()
         res = res.sort_values(by=COLS["TIEMPO"], ascending=True).tail(10)
-        fig = px.bar(res, x=COLS["TIEMPO"], y=groupby_col, orientation='h', title=title, text_auto=".0f", color_discrete_sequence=["#5cb85c"])
+        res['HOVER_TEXT'] = res.apply(lambda r: f"<b>{r[groupby_col]}</b><br>{r[COLS['TIEMPO']]:,.0f} MIN", axis=1)
+        
+        fig = px.bar(res, x=COLS["TIEMPO"], y=groupby_col, orientation='h', title=title, text_auto=".0f", 
+                     color_discrete_sequence=["#5cb85c"], custom_data=['HOVER_TEXT'])
         fig.update_layout(yaxis_title=None, xaxis_title="Minutos", clickmode="event+select")
+        fig.update_traces(hovertemplate="%{customdata[0]}<extra></extra>")
         
         event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key=key)
         
@@ -207,67 +248,57 @@ with tab1:
 with tab2:
     st.title("Pérdida de OPINONA")
     
-    # El denominador FIJO para el periodo seleccionado (independiente de línea/equipo)
-    # Se calcula sobre las 6 categorías principales (df_100)
     TIEMPO_TOTAL_PLANTA = df_100[COLS["TIEMPO"]].sum()
     
-    st.markdown("### Filtros de Numerador (Línea y Equipo)")
     l1, l2 = st.columns(2)
     lineas_disp = sorted(df_100[COLS["LINEA"]].dropna().unique().tolist())
-    lineas_sel = l1.multiselect("Filtrar por Línea", options=lineas_disp, default=[])
+    lineas_sel = l1.multiselect("Filtrar por Línea", options=lineas_disp, default=[], placeholder=" ")
     
-    # Filtrar equipos según líneas seleccionadas (si hay)
     df_filtro_linea = df_100 if not lineas_sel else df_100[df_100[COLS["LINEA"]].isin(lineas_sel)]
     equipos_disp = sorted(df_filtro_linea[COLS["NIVEL_2"]].dropna().unique().tolist())
-    equipos_sel = l2.multiselect("Filtrar por Equipo", options=equipos_disp, default=[])
+    equipos_sel = l2.multiselect("Filtrar por Equipo", options=equipos_disp, default=[], placeholder=" ")
     
-    st.info(f"**Denominador (Tiempo Total Planta Periodo Seleccionado):** {TIEMPO_TOTAL_PLANTA:,.0f} min")
-    
-    # Numerador: Filtrado por línea y equipo
     df_num = df_100.copy()
     if lineas_sel:
         df_num = df_num[df_num[COLS["LINEA"]].isin(lineas_sel)]
     if equipos_sel:
         df_num = df_num[df_num[COLS["NIVEL_2"]].isin(equipos_sel)]
         
-    # --- 1. Gráficos por Equipo (Paradas Mayores y Menores) ---
+    # --- 1. Gráficos por Equipo ---
     st.subheader("Pérdida de OPINONA por Paradas (Equipos)")
     df_equipos_pmayor = df_num[df_num['CATEGORIA_100'] == "PARADA MAYOR"]
     df_equipos_pmenor = df_num[df_num['CATEGORIA_100'] == "PARADA MENOR"]
     
     def plot_perdida_equipo(df_temp, color_bar, title):
         res = df_temp.groupby(COLS["NIVEL_2"])[COLS["TIEMPO"]].sum().reset_index()
-        # Cálculo de porcentaje usando el denominador global del periodo
         res['PORCENTAJE'] = (res[COLS["TIEMPO"]] / TIEMPO_TOTAL_PLANTA) * 100
         res = res[res['PORCENTAJE'] > 0]
-        res = res.sort_values(by='PORCENTAJE', ascending=True).tail(15) # Top 15 para no saturar
+        res = res.sort_values(by='PORCENTAJE', ascending=True).tail(15) 
         
-        fig = px.bar(res, x='PORCENTAJE', y=COLS["NIVEL_2"], orientation='h', title=title, text_auto=".2f", color_discrete_sequence=[color_bar])
+        res['HOVER_TEXT'] = res.apply(lambda r: f"<b>{r[COLS['NIVEL_2']]}</b><br>{r['PORCENTAJE']:.2f}%<br>{r[COLS['TIEMPO']]:,.0f} MIN", axis=1)
+        
+        fig = px.bar(res, x='PORCENTAJE', y=COLS["NIVEL_2"], orientation='h', title=title, text_auto=".2f", 
+                     color_discrete_sequence=[color_bar], custom_data=['HOVER_TEXT'])
         fig.update_layout(yaxis_title=None, xaxis_title="% Pérdida OPINONA", xaxis_ticksuffix=" %", height=500)
+        fig.update_traces(hovertemplate="%{customdata[0]}<extra></extra>")
         st.plotly_chart(fig, use_container_width=True)
         
     col_may, col_men = st.columns(2)
     with col_may:
-        plot_perdida_equipo(df_equipos_pmayor, COLORS["PARADA MAYOR"], "Pérdida por Paradas Mayores (Top 15 Equipos)")
+        plot_perdida_equipo(df_equipos_pmayor, COLORS["PARADA MAYOR"], "Pérdida por Paradas Mayores")
     with col_men:
-        plot_perdida_equipo(df_equipos_pmenor, COLORS["PARADA MENOR"], "Pérdida por Paradas Menores (Top 15 Equipos)")
+        plot_perdida_equipo(df_equipos_pmenor, COLORS["PARADA MENOR"], "Pérdida por Paradas Menores")
         
     st.markdown("---")
     
     # --- 2. Gráfico de Columnas por Mes ---
     st.subheader("Evolución Mensual de Pérdidas de OPINONA")
     
-    # Filtrar solo PM, pm, y PV
     cats_mensuales = ["PARADA MAYOR", "PARADA MENOR", "PERDIDA DE VELOCIDAD"]
     df_mensual_num = df_num[df_num['CATEGORIA_100'].isin(cats_mensuales)].copy()
-    
-    # Denominador mensual (basado en df_100, SIN filtro de equipo/línea, para reflejar % a nivel planta)
     df_den_mes = df_100.groupby(['AÑO', 'MES'])[COLS["TIEMPO"]].sum().reset_index(name='DEN_MES')
-    
-    # Numerador mensual
     df_num_mes = df_mensual_num.groupby(['AÑO', 'MES', 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index(name='NUM_MES')
     
-    # Unir y calcular %
     if not df_num_mes.empty and not df_den_mes.empty:
         df_plot_mes = pd.merge(df_num_mes, df_den_mes, on=['AÑO', 'MES'])
         df_plot_mes['PORCENTAJE'] = (df_plot_mes['NUM_MES'] / df_plot_mes['DEN_MES']) * 100
@@ -276,30 +307,37 @@ with tab2:
         df_plot_mes['MES_AÑO_STR'] = df_plot_mes['MES'].map(MESES_ABBR) + " " + df_plot_mes['AÑO'].astype(int).astype(str)
         df_plot_mes = df_plot_mes.sort_values('MES_AÑO_NUM')
         
+        df_plot_mes['HOVER_TEXT'] = df_plot_mes.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%<br>{r['NUM_MES']:.0f} MIN", axis=1)
+        
         fig_col_mes = px.bar(df_plot_mes, x='MES_AÑO_STR', y='PORCENTAJE', color='CATEGORIA_100',
-                             color_discrete_map=COLORS, text_auto=".2f",
+                             color_discrete_map=COLORS, text_auto=".2f", custom_data=['HOVER_TEXT'],
                              title="% Pérdidas OPINONA a Nivel Planta por Mes")
+                             
         fig_col_mes.update_layout(xaxis_title="Mes", yaxis_title="% Pérdida", yaxis_ticksuffix=" %",
-                                  xaxis={'categoryorder':'array', 'categoryarray':df_plot_mes['MES_AÑO_STR'].unique()})
-        # Mostrar el texto por dentro
-        fig_col_mes.update_traces(textposition='inside', insidetextfont=dict(size=14, family="Arial Black"), textangle=0)
+                                  xaxis={'categoryorder':'array', 'categoryarray':df_plot_mes['MES_AÑO_STR'].unique()},
+                                  legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""))
+        fig_col_mes.update_traces(textposition='inside', insidetextfont=dict(size=14, family="Arial Black"), textangle=0,
+                                  hovertemplate="%{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_col_mes, use_container_width=True)
         
         # --- 3. Gráfico de Líneas por Mes ---
         st.markdown("---")
         st.subheader("Tendencia de Paradas Mayores y Menores")
-        df_linea_mes = df_plot_mes[df_plot_mes['CATEGORIA_100'].isin(["PARADA MAYOR", "PARADA MENOR"])]
+        df_linea_mes = df_plot_mes[df_plot_mes['CATEGORIA_100'].isin(["PARADA MAYOR", "PARADA MENOR"])].copy()
         
         if not df_linea_mes.empty:
-            fig_line_mes = px.line(df_linea_mes, x='MES_AÑO_STR', y='PORCENTAJE', color='CATEGORIA_100',
-                                   color_discrete_map=COLORS, markers=True, text='PORCENTAJE',
-                                   title="Tendencia Mensual de Paradas Mayores y Menores (%)")
-            fig_line_mes.update_traces(textposition='top center', texttemplate='%{text:.2f}%', textfont=dict(size=12))
-            fig_line_mes.update_layout(xaxis_title="Mes", yaxis_title="% Pérdida", yaxis_ticksuffix=" %",
-                                       xaxis={'categoryorder':'array', 'categoryarray':df_plot_mes['MES_AÑO_STR'].unique()})
+            df_linea_mes['HOVER_TEXT'] = df_linea_mes.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%", axis=1)
             
-            # Ajustar el margen superior para que los textos de la línea no se corten
-            fig_line_mes.update_layout(margin=dict(t=50))
+            fig_line_mes = px.line(df_linea_mes, x='MES_AÑO_STR', y='PORCENTAJE', color='CATEGORIA_100',
+                                   color_discrete_map=COLORS, markers=True, text='PORCENTAJE', custom_data=['HOVER_TEXT'],
+                                   title="Tendencia Mensual de Paradas Mayores y Menores (%)")
+                                   
+            fig_line_mes.update_traces(textposition='top center', texttemplate='%{text:.2f}%', textfont=dict(size=14, family="Arial Black"), hovertemplate="%{customdata[0]}<extra></extra>")
+            fig_line_mes.update_layout(xaxis_title="Mes", yaxis_title="% Pérdida", yaxis_ticksuffix=" %",
+                                       xaxis={'categoryorder':'array', 'categoryarray':df_plot_mes['MES_AÑO_STR'].unique()},
+                                       legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""),
+                                       margin=dict(t=50))
+            
             st.plotly_chart(fig_line_mes, use_container_width=True)
         else:
             st.warning("No hay datos de Parada Mayor o Menor para la selección actual.")
