@@ -49,15 +49,25 @@ st.sidebar.title("Configuración")
 # Para máxima estabilidad, usaremos el enlace de "Publicar en la web" en formato CSV
 @st.cache_data(ttl=600) # Se actualiza cada 10 minutos
 def cargar_datos():
-    # Intenta leer el enlace CSV desde los secretos, si no existe, muestra un error amigable
+    # Intenta leer el enlace CSV desde los secretos
     try:
         url_csv = st.secrets["url_csv"]
     except:
         st.error("Falta configurar el enlace en los secretos. Revisa el Paso 3.")
         st.stop()
         
-    # Leer el CSV directamente con Pandas (evita el Error 400 de la API de Google)
-    df = pd.read_csv(url_csv, usecols=list(COLS.values()))
+    # Leer el CSV directamente con Pandas (cargamos todas las columnas primero)
+    df = pd.read_csv(url_csv)
+    
+    # Limpiar los nombres de las columnas (quita espacios accidentales al inicio o final)
+    df.columns = df.columns.str.strip()
+    
+    # Validar que las columnas que necesitamos realmente existan
+    columnas_esperadas = list(COLS.values())
+    columnas_faltantes = [c for c in columnas_esperadas if c not in df.columns]
+    
+    if columnas_faltantes:
+        raise ValueError(f"Faltan las siguientes columnas: {columnas_faltantes}. \nColumnas que SI encontró en tu archivo: {list(df.columns)}")
     
     # Limpieza básica
     df[COLS["FECHA"]] = pd.to_datetime(df[COLS["FECHA"]], errors='coerce')
@@ -76,8 +86,9 @@ try:
         df_raw = cargar_datos()
     st.sidebar.success("✅ Conectado a Google Sheets")
 except Exception as e:
-    st.sidebar.error("❌ Error de Conexión.")
-    st.error(f"Error al leer los datos. Asegúrate de que los nombres de las columnas en el Sheets coincidan con el código. Detalle: {e}")
+    st.sidebar.error("❌ Error de Conexión o Columnas.")
+    st.error(f"⚠️ Error: {e}")
+    st.info("💡 CONSEJO: Si el error dice que faltan columnas, mira la lista de 'Columnas que SI encontró' y modifica el diccionario `COLS` al principio del archivo `app.py` para que los nombres coincidan exactamente (mayúsculas y minúsculas importan).")
     st.stop()
 
 # --- FILTROS GLOBALES ---
