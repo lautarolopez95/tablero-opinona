@@ -21,7 +21,7 @@ st.markdown("""
 COLS = {
     "FECHA": "FECHA",
     "LINEA": "Linea",
-    "CATEGORIA": "Desc_Paro_1",  # Categoría principal de los 6 tiempos
+    "CATEGORIA": "Desglose 1",   # <-- Cambiado para usar el agrupador correcto de OPINONA
     "EQUIPO": "Desc_Paro_2",     # Equipo afectado
     "NIVEL_3": "Desc_Paro_3",
     "NIVEL_4": "Desc_Paro_4",
@@ -140,11 +140,18 @@ with tab1:
     col1, col2 = st.columns(2)
     with col1:
         fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y="PORCENTAJE", color=COLS["CATEGORIA"],
-                            color_discrete_map=COLORS, text_auto=".2f",
+                            color_discrete_map=COLORS,
                             hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_LINEA": False},
                             title="OPINONA PLANTA POR LÍNEA")
-        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %")
-        fig_planta.update_traces(texttemplate='%{y:.2f}%') # Mostrar % en el texto
+        
+        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=700)
+        # Mostrar el porcentaje en formato .2f% y forzar a que sea legible
+        fig_planta.update_traces(
+            texttemplate='%{y:.2f}%', 
+            textposition='inside',
+            insidetextfont=dict(size=14, color='white'),
+            textangle=0
+        )
         st.plotly_chart(fig_planta, use_container_width=True)
         
     # 2. Gráfico por Año
@@ -157,11 +164,17 @@ with tab1:
         df_año_cat['PORCENTAJE'] = (df_año_cat[COLS["TIEMPO"]] / df_año_cat['TOTAL_AÑO']) * 100
         
         fig_total = px.bar(df_año_cat, x='AÑO', y="PORCENTAJE", color=COLS["CATEGORIA"],
-                           color_discrete_map=COLORS, text_auto=".2f",
+                           color_discrete_map=COLORS,
                            hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_AÑO": False},
                            title="OPINONA TOTAL PLANTA (ANUAL)")
-        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %")
-        fig_total.update_traces(texttemplate='%{y:.2f}%') # Mostrar % en el texto
+                           
+        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=700)
+        fig_total.update_traces(
+            texttemplate='%{y:.2f}%', 
+            textposition='inside',
+            insidetextfont=dict(size=14, color='white'),
+            textangle=0
+        )
         st.plotly_chart(fig_total, use_container_width=True)
 
     st.markdown("---")
