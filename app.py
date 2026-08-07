@@ -176,8 +176,8 @@ with tab1:
                             color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
                             title="OPINONA PLANTA POR LÍNEA")
         
-        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750, 
-                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""))
+        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=550, 
+                                 legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, title=""))
         fig_planta.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
                                  hovertemplate="%{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_planta, use_container_width=True)
@@ -195,8 +195,8 @@ with tab1:
                            color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
                            title="OPINONA TOTAL PLANTA (ANUAL)")
                            
-        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=750, 
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""))
+        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=550, 
+                                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, title=""))
         fig_total.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
                                 hovertemplate="%{customdata[0]}<extra></extra>")
         st.plotly_chart(fig_total, use_container_width=True)
