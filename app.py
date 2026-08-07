@@ -41,18 +41,23 @@ COLORS = {
 }
 
 # -----------------------------------------------------------------------------
-# CARGA DE DATOS (Google Sheets)
+# CARGA DE DATOS (Vía Enlace CSV de Google Sheets)
 # -----------------------------------------------------------------------------
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2800/2800100.png", width=100) # Logo placeholder
 st.sidebar.title("Configuración")
 
-# Crear conexión nativa a Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
-
+# Para máxima estabilidad, usaremos el enlace de "Publicar en la web" en formato CSV
 @st.cache_data(ttl=600) # Se actualiza cada 10 minutos
 def cargar_datos():
-    # Leer la hoja de cálculo. Se asume que la URL está en los Secretos de Streamlit.
-    df = conn.read(worksheet="BD", usecols=list(COLS.values()))
+    # Intenta leer el enlace CSV desde los secretos, si no existe, muestra un error amigable
+    try:
+        url_csv = st.secrets["url_csv"]
+    except:
+        st.error("Falta configurar el enlace en los secretos. Revisa el Paso 3.")
+        st.stop()
+        
+    # Leer el CSV directamente con Pandas (evita el Error 400 de la API de Google)
+    df = pd.read_csv(url_csv, usecols=list(COLS.values()))
     
     # Limpieza básica
     df[COLS["FECHA"]] = pd.to_datetime(df[COLS["FECHA"]], errors='coerce')
@@ -67,12 +72,12 @@ def cargar_datos():
     return df
 
 try:
-    with st.spinner("Conectando a Google Sheets y descargando datos..."):
+    with st.spinner("Descargando datos desde Google Sheets..."):
         df_raw = cargar_datos()
     st.sidebar.success("✅ Conectado a Google Sheets")
 except Exception as e:
     st.sidebar.error("❌ Error de Conexión.")
-    st.error(f"Asegúrate de haber configurado el URL del Sheet en los secretos. Detalle: {e}")
+    st.error(f"Error al leer los datos. Asegúrate de que los nombres de las columnas en el Sheets coincidan con el código. Detalle: {e}")
     st.stop()
 
 # --- FILTROS GLOBALES ---
