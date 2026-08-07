@@ -162,6 +162,7 @@ with tab1:
     CAT_100 = ["PRODUCCION", "DETENCION PLANEADA", "PARADA MAYOR", "PARADA MENOR", "PARADA EXTERNA", "PERDIDA DE VELOCIDAD"]
     df_100 = df[df['CATEGORIA_100'].isin(CAT_100)].copy()
     
+    # 1. Gráfico por Línea
     df_linea_cat = df_100.groupby([COLS["LINEA"], 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
     df_linea_cat['TOTAL_LINEA'] = df_linea_cat.groupby(COLS["LINEA"])[COLS["TIEMPO"]].transform('sum')
     df_linea_cat['PORCENTAJE'] = (df_linea_cat[COLS["TIEMPO"]] / df_linea_cat['TOTAL_LINEA']) * 100
@@ -170,36 +171,36 @@ with tab1:
     # Tooltip personalizado
     df_linea_cat['HOVER_TEXT'] = df_linea_cat.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%<br>{r[COLS['TIEMPO']]:.0f} MIN", axis=1)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y="PORCENTAJE", color='CATEGORIA_100',
-                            color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
-                            title="OPINONA PLANTA POR LÍNEA")
+    fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y="PORCENTAJE", color='CATEGORIA_100',
+                        color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
+                        title="OPINONA PLANTA POR LÍNEA")
+    
+    fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=550, 
+                             legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, title=""))
+    fig_planta.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
+                             hovertemplate="%{customdata[0]}<extra></extra>")
+    st.plotly_chart(fig_planta, use_container_width=True)
         
-        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=550, 
-                                 legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, title=""))
-        fig_planta.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
-                                 hovertemplate="%{customdata[0]}<extra></extra>")
-        st.plotly_chart(fig_planta, use_container_width=True)
+    st.markdown("---")
         
-    with col2:
-        df_año_cat = df_100.groupby(['AÑO', 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
-        df_año_cat['AÑO'] = df_año_cat['AÑO'].astype(int).astype(str)
-        df_año_cat['TOTAL_AÑO'] = df_año_cat.groupby('AÑO')[COLS["TIEMPO"]].transform('sum')
-        df_año_cat['PORCENTAJE'] = (df_año_cat[COLS["TIEMPO"]] / df_año_cat['TOTAL_AÑO']) * 100
-        df_año_cat['TEXTO'] = df_año_cat['PORCENTAJE'].apply(lambda x: f"{x:.2f}%" if x >= 2.0 else "")
-        
-        df_año_cat['HOVER_TEXT'] = df_año_cat.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%<br>{r[COLS['TIEMPO']]:.0f} MIN", axis=1)
-        
-        fig_total = px.bar(df_año_cat, x='AÑO', y="PORCENTAJE", color='CATEGORIA_100',
-                           color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
-                           title="OPINONA TOTAL PLANTA (ANUAL)")
-                           
-        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=550, 
-                                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, title=""))
-        fig_total.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
-                                hovertemplate="%{customdata[0]}<extra></extra>")
-        st.plotly_chart(fig_total, use_container_width=True)
+    # 2. Gráfico por Año
+    df_año_cat = df_100.groupby(['AÑO', 'CATEGORIA_100'])[COLS["TIEMPO"]].sum().reset_index()
+    df_año_cat['AÑO'] = df_año_cat['AÑO'].astype(int).astype(str)
+    df_año_cat['TOTAL_AÑO'] = df_año_cat.groupby('AÑO')[COLS["TIEMPO"]].transform('sum')
+    df_año_cat['PORCENTAJE'] = (df_año_cat[COLS["TIEMPO"]] / df_año_cat['TOTAL_AÑO']) * 100
+    df_año_cat['TEXTO'] = df_año_cat['PORCENTAJE'].apply(lambda x: f"{x:.2f}%" if x >= 2.0 else "")
+    
+    df_año_cat['HOVER_TEXT'] = df_año_cat.apply(lambda r: f"<b>{r['CATEGORIA_100']}</b><br>{r['PORCENTAJE']:.2f}%<br>{r[COLS['TIEMPO']]:.0f} MIN", axis=1)
+    
+    fig_total = px.bar(df_año_cat, x='AÑO', y="PORCENTAJE", color='CATEGORIA_100',
+                       color_discrete_map=COLORS, text="TEXTO", custom_data=['HOVER_TEXT'],
+                       title="OPINONA TOTAL PLANTA (ANUAL)")
+                       
+    fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %", height=550, 
+                            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, title=""))
+    fig_total.update_traces(textposition='inside', insidetextfont=dict(size=18, family="Arial Black"), textangle=0,
+                            hovertemplate="%{customdata[0]}<extra></extra>")
+    st.plotly_chart(fig_total, use_container_width=True)
 
     st.markdown("---")
     st.subheader("Desglose de Paros (Filtros en Cascada)")
