@@ -19,7 +19,7 @@ st.markdown("""
 # DICCIONARIO DE COLUMNAS (Mapeo exacto al Excel/Sheets)
 # -----------------------------------------------------------------------------
 COLS = {
-    "FECHA": "FECHA REAL",
+    "FECHA": "FECHA",
     "LINEA": "Linea",
     "CATEGORIA": "Desc_Paro_1",  # Categoría principal de los 6 tiempos
     "EQUIPO": "Desc_Paro_2",     # Equipo afectado
