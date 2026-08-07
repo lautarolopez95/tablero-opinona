@@ -131,24 +131,37 @@ with tab1:
     CAT_100 = ["PRODUCCION", "DETENCION PLANEADA", "PARADA MAYOR", "PARADA MENOR", "PARADA EXTERNA", "PERDIDA DE VELOCIDAD"]
     df_100 = df[df[COLS["CATEGORIA"]].isin(CAT_100)].copy()
     
+    # 1. Gráfico por Línea
     df_linea_cat = df_100.groupby([COLS["LINEA"], COLS["CATEGORIA"]])[COLS["TIEMPO"]].sum().reset_index()
+    # Calcular Porcentaje real matemáticamente
+    df_linea_cat['TOTAL_LINEA'] = df_linea_cat.groupby(COLS["LINEA"])[COLS["TIEMPO"]].transform('sum')
+    df_linea_cat['PORCENTAJE'] = (df_linea_cat[COLS["TIEMPO"]] / df_linea_cat['TOTAL_LINEA']) * 100
     
     col1, col2 = st.columns(2)
     with col1:
-        fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y=COLS["TIEMPO"], color=COLS["CATEGORIA"],
-                            color_discrete_map=COLORS, barmode="relative", text_auto=".2%",
+        fig_planta = px.bar(df_linea_cat, x=COLS["LINEA"], y="PORCENTAJE", color=COLS["CATEGORIA"],
+                            color_discrete_map=COLORS, text_auto=".2f",
+                            hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_LINEA": False},
                             title="OPINONA PLANTA POR LÍNEA")
-        fig_planta.update_layout(barnorm="percent", yaxis_title="Porcentaje (%)")
+        fig_planta.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %")
+        fig_planta.update_traces(texttemplate='%{y:.2f}%') # Mostrar % en el texto
         st.plotly_chart(fig_planta, use_container_width=True)
         
+    # 2. Gráfico por Año
     with col2:
         df_año_cat = df_100.groupby(['AÑO', COLS["CATEGORIA"]])[COLS["TIEMPO"]].sum().reset_index()
         # Formatear el año para el gráfico también
         df_año_cat['AÑO'] = df_año_cat['AÑO'].astype(int).astype(str)
-        fig_total = px.bar(df_año_cat, x='AÑO', y=COLS["TIEMPO"], color=COLS["CATEGORIA"],
-                           color_discrete_map=COLORS, barmode="relative", text_auto=".2%",
+        # Calcular Porcentaje real matemáticamente
+        df_año_cat['TOTAL_AÑO'] = df_año_cat.groupby('AÑO')[COLS["TIEMPO"]].transform('sum')
+        df_año_cat['PORCENTAJE'] = (df_año_cat[COLS["TIEMPO"]] / df_año_cat['TOTAL_AÑO']) * 100
+        
+        fig_total = px.bar(df_año_cat, x='AÑO', y="PORCENTAJE", color=COLS["CATEGORIA"],
+                           color_discrete_map=COLORS, text_auto=".2f",
+                           hover_data={COLS["TIEMPO"]: True, "PORCENTAJE": False, "TOTAL_AÑO": False},
                            title="OPINONA TOTAL PLANTA (ANUAL)")
-        fig_total.update_layout(barnorm="percent", yaxis_title="Porcentaje (%)")
+        fig_total.update_layout(yaxis_title="Porcentaje (%)", yaxis_ticksuffix=" %")
+        fig_total.update_traces(texttemplate='%{y:.2f}%') # Mostrar % en el texto
         st.plotly_chart(fig_total, use_container_width=True)
 
     st.markdown("---")
@@ -164,8 +177,8 @@ with tab1:
         fig = px.bar(res, x=COLS["TIEMPO"], y=groupby_col, orientation='h', title=title, text_auto=".0f", color_discrete_sequence=["#5cb85c"])
         fig.update_layout(yaxis_title=None, xaxis_title="Minutos", clickmode="event+select")
         
-        # Activar el evento on_select
-        event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", selection_mode="multi", key=key)
+        # Activar el evento on_select (quitamos selection_mode="multi" que causa el error)
+        event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key=key)
         
         # Extraer las selecciones del usuario
         selected = []
